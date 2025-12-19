@@ -46,6 +46,22 @@ class BarGraphClock {
         return ((year % 4 === 0 && year % 100 !== 0) || year % 400 === 0) ? 366 : 365;
     }
 
+    getWeekOfYear(date) {
+        // Get week of year (1-52 or 1-53) using ISO week numbering
+        const d = new Date(date);
+        d.setHours(0, 0, 0, 0);
+        d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+        const week1 = new Date(d.getFullYear(), 0, 4);
+        return 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+    }
+
+    getWeeksInYear(year) {
+        // Calculate number of weeks in a year (usually 52, sometimes 53)
+        const dec31 = new Date(year, 11, 31);
+        const weekOfDec31 = this.getWeekOfYear(dec31);
+        return weekOfDec31 === 1 ? 52 : weekOfDec31;
+    }
+
     getDaysInMonth(year, month) {
         return new Date(year, month + 1, 0).getDate();
     }
@@ -133,12 +149,16 @@ class BarGraphClock {
         const daysInYear = this.getDaysInYear(year);
         const daysInMonth = this.getDaysInMonth(year, now.getMonth());
         const season = this.getSeasonProgress(now);
+        const weekOfYear = this.getWeekOfYear(now);
+        const weeksInYear = this.getWeeksInYear(year);
 
         // Calculate progress values
         const millenniumProgress = (year % 1000) / 1000;
         const centuryProgress = (year % 100) / 100;
         const decadeProgress = (year % 10) / 10;
         const yearProgress = dayOfYear / daysInYear;
+        const yearInMonthsProgress = (month - 1) / 11; // 1-12, so (month - 1) / 11
+        const yearInWeeksProgress = weeksInYear > 1 ? (weekOfYear - 1) / (weeksInYear - 1) : 0; // 1-52/53
         const seasonProgress = season.progress;
         const monthProgress = (day - 1) / daysInMonth;
         const weekProgress = (weekDay - 1) / 6; // 1-7, so (weekDay - 1) / 6 for 0-1 range
@@ -149,76 +169,106 @@ class BarGraphClock {
         const secondProgress = seconds / 59;
 
         // Create bars in order from longest to shortest time period
+        // Color categories:
+        // - "years": Things measured in years (Millennium, Century, Decade, Year)
+        // - "year-parts": Things that measure a year (Year in months, Year in weeks, Season, Month)
+        // - "day-parts": Things that measure 1 day or less (Hours, AM/PM, Minutes, Seconds)
+        // - "between": Anything between a day and a year (Week)
         const values = [
             { 
-                label: 'Millennium', 
+                label: 'Millennium (yr)', 
                 progress: millenniumProgress, 
                 value: year % 1000,
-                max: 1000
+                max: 1000,
+                colorCategory: 'years'
             },
             { 
-                label: 'Century', 
+                label: 'Century (yr)', 
                 progress: centuryProgress, 
                 value: year % 100,
-                max: 100
+                max: 100,
+                colorCategory: 'years'
             },
             { 
-                label: 'Decade', 
+                label: 'Decade (yr)', 
                 progress: decadeProgress, 
                 value: year % 10,
-                max: 10
+                max: 10,
+                colorCategory: 'years'
             },
             { 
-                label: 'Year', 
+                label: 'Year (d)', 
                 progress: yearProgress, 
                 value: dayOfYear,
-                max: daysInYear
+                max: daysInYear,
+                colorCategory: 'year-parts'
             },
             { 
-                label: season.name, 
+                label: `Year (mo)`, 
+                progress: yearInMonthsProgress, 
+                value: month,
+                max: 12,
+                colorCategory: 'year-parts'
+            },
+            { 
+                label: `Year (wk)`, 
+                progress: yearInWeeksProgress, 
+                value: weekOfYear,
+                max: weeksInYear,
+                colorCategory: 'year-parts'
+            },
+            { 
+                label: `${season.name} (days)`, 
                 progress: seasonProgress, 
                 value: season.daysPassed,
-                max: season.totalDays
+                max: season.totalDays,
+                colorCategory: 'between'
             },
             { 
-                label: 'Month', 
+                label: 'Month (days)', 
                 progress: monthProgress, 
                 value: day,
-                max: daysInMonth
+                max: daysInMonth,
+                colorCategory: 'between'
             },
             { 
-                label: 'Week', 
+                label: 'Week (days)', 
                 progress: weekProgress, 
                 value: weekDay,
-                max: 7
+                max: 7,
+                colorCategory: 'between'
             },
             { 
-                label: 'Hours', 
+                label: 'Hours (hr)', 
                 progress: hourProgress, 
                 value: hours,
-                max: 23
+                max: 23,
+                colorCategory: 'day-parts'
             },
             { 
-                label: ampm, 
+                label: `${ampm} (hr)`, 
                 progress: ampmProgress, 
                 value: hours12,
-                max: 12
+                max: 12,
+                colorCategory: 'day-parts'
             },
             { 
-                label: 'Minutes', 
+                label: 'Minutes (min)', 
                 progress: minuteProgress, 
                 value: minutes,
-                max: 59
+                max: 59,
+                colorCategory: 'day-parts'
             },
             { 
-                label: 'Seconds', 
+                label: 'Seconds (sec)', 
                 progress: secondProgress, 
                 value: seconds,
-                max: 59
+                max: 59,
+                colorCategory: 'day-parts'
             }
         ];
 
-        values.forEach(({ label, progress, value, max, extraText }) => {
+        values.forEach(({ label, progress, value, max, extraText, colorCategory }) => {
             const row = document.createElement('div');
             row.className = 'bar-row';
 
@@ -233,7 +283,7 @@ class BarGraphClock {
             barContainer.className = 'bar-container';
 
             const bar = document.createElement('div');
-            bar.className = 'bar';
+            bar.className = `bar bar-${colorCategory}`;
             bar.style.width = `${progress * 100}%`;
 
             // Create value element
