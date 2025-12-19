@@ -14,15 +14,16 @@ class BarGraphClock {
     }
 
     updateClock() {
+        // Use local time explicitly
         const now = new Date();
         const year = now.getFullYear();
-        const month = now.getMonth() + 1; // 1-12
-        const day = now.getDate();
-        const hours = now.getHours();
-        const minutes = now.getMinutes();
-        const seconds = now.getSeconds();
+        const month = now.getMonth() + 1; // 1-12 (getMonth() returns 0-11)
+        const day = now.getDate(); // Local day of month
+        const hours = now.getHours(); // Local hours (0-23)
+        const minutes = now.getMinutes(); // Local minutes
+        const seconds = now.getSeconds(); // Local seconds
 
-        // Get day name
+        // Get day name (0 = Sunday, 6 = Saturday)
         const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         const dayName = dayNames[now.getDay()];
 
@@ -122,6 +123,10 @@ class BarGraphClock {
         const hours = now.getHours();
         const minutes = now.getMinutes();
         const seconds = now.getSeconds();
+        
+        // Calculate 12-hour format for AM/PM
+        const hours12 = hours === 0 ? 12 : (hours > 12 ? hours - 12 : hours);
+        const ampm = hours >= 12 ? 'PM' : 'AM';
 
         // Calculate time units
         const dayOfYear = this.getDayOfYear(now);
@@ -138,6 +143,8 @@ class BarGraphClock {
         const monthProgress = (day - 1) / daysInMonth;
         const weekProgress = (weekDay - 1) / 6; // 1-7, so (weekDay - 1) / 6 for 0-1 range
         const hourProgress = hours / 23;
+        // AM/PM bar: 12 is at 0%, 11 is at 100% (12 behaves like 0)
+        const ampmProgress = (hours12 === 12 ? 0 : hours12) / 11;
         const minuteProgress = minutes / 59;
         const secondProgress = seconds / 59;
 
@@ -168,11 +175,10 @@ class BarGraphClock {
                 max: daysInYear
             },
             { 
-                label: 'Season', 
+                label: season.name, 
                 progress: seasonProgress, 
                 value: season.daysPassed,
-                max: season.totalDays,
-                extraText: season.name
+                max: season.totalDays
             },
             { 
                 label: 'Month', 
@@ -191,6 +197,12 @@ class BarGraphClock {
                 progress: hourProgress, 
                 value: hours,
                 max: 23
+            },
+            { 
+                label: ampm, 
+                progress: ampmProgress, 
+                value: hours12,
+                max: 12
             },
             { 
                 label: 'Minutes', 
@@ -224,23 +236,34 @@ class BarGraphClock {
             bar.className = 'bar';
             bar.style.width = `${progress * 100}%`;
 
-            // Add value inside the bar
+            // Create value element
             const valueEl = document.createElement('div');
-            valueEl.className = 'bar-value';
             let displayText = value.toString();
             if (extraText) {
                 displayText = `${value} (${extraText})`;
             }
             valueEl.textContent = displayText;
-            bar.appendChild(valueEl);
 
-            barContainer.appendChild(bar);
+            // Position value based on bar progress
+            if (progress < 0.5) {
+                // Below 50%: show value to the right of the bar (positioned relative to container)
+                valueEl.className = 'bar-value bar-value-outside';
+                valueEl.style.left = `calc(${progress * 100}% + 8px)`;
+                barContainer.appendChild(bar);
+                barContainer.appendChild(valueEl);
+            } else {
+                // 50% or above: show value inside the bar (positioned relative to bar)
+                valueEl.className = 'bar-value bar-value-inside';
+                bar.appendChild(valueEl);
+                barContainer.appendChild(bar);
+            }
+            
+            row.appendChild(barContainer);
             
             // Add max value outside the bar
             const maxEl = document.createElement('div');
             maxEl.className = 'bar-max';
             maxEl.textContent = max.toString();
-            row.appendChild(barContainer);
             row.appendChild(maxEl);
             
             this.barGraph.appendChild(row);
